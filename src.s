@@ -14,8 +14,8 @@
 	.gba
 	.thumb
 
-	INPUT_FILE equ "radical_red_v2.1.gba"
-	OUTPUT_FILE equ "radical_red_v2.1_instant_text.gba"
+	INPUT_FILE equ "radical_red_v2_1.gba"
+	OUTPUT_FILE equ "radical_red_v2_1_instant_text.gba"
 
 	AddTextPrinterHookPatch equ 0x8002cfc
 	RunTextPrinters equ 0x8002de8
@@ -23,6 +23,9 @@
 	RenderFont equ 0x8002e7c
 	CopyWindowToVram equ 0x8003f20
 	sTextPrinters equ 0x2020034
+
+	InstantHPBarsPatch1 equ 0x804a300
+	InstantHPBarsPatch2 equ 0x804a360
 
 	FREE_SPACE equ 0x8730000
 
@@ -44,6 +47,21 @@ AddTextPrinterHook:
 	beq AddTextPrinterHookReturn
 	mov r5, 1
 	b AddTextPrinterHookReturn
+
+	// partially based on https://github.com/luckytyphlosion/pokefirered/commit/5e8fee38e3438131c746b6bde327f1289750e7a5
+	// but need to add `s32 toAdd_ = 32768` somewhere
+	// toAdd = 32768
+	.org InstantHPBarsPatch1
+	mov r3, 1
+	lsl r3, r3, 15
+	str r3, [sp, 0x1c]
+
+	// s32 toAdd_ = 32768
+	.org InstantHPBarsPatch2
+	nop
+	nop
+	mov r0, 1
+	lsl r0, r0, 15
 
 	.org FREE_SPACE
 // compiled from https://github.com/luckytyphlosion/pokefirered/commit/a27b8f1458d92b96ace70bd0e80d4e85b29701e9
