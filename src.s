@@ -14,8 +14,8 @@
 	.gba
 	.thumb
 
-	INPUT_FILE equ "radical_red_v2_1.gba"
-	OUTPUT_FILE equ "radical_red_v2_1_instant_text.gba"
+	INPUT_FILE equ "rr2_3a.gba"
+	OUTPUT_FILE equ "rr2_3a_instant_text.gba"
 
 	AddTextPrinterHookPatch equ 0x8002cfc
 	RunTextPrinters equ 0x8002de8
@@ -26,6 +26,16 @@
 
 	InstantHPBarsPatch1 equ 0x804a300
 	InstantHPBarsPatch2 equ 0x804a360
+
+	TurnStatChangeAnimOffPatch1 equ 0x9481cfc
+	TurnStatChangeAnimOffPatch2 equ 0x9481ddc
+	TurnStatChangeAnimOffPatch1ForcedAnimsIfStatement equ 0x9481d06
+
+	BattleScript_Pausex20_PauseValue equ 0x81d89f2
+	BattleScript_EffectStatUpAfterAtkCanceler_Pause0x20_PauseValue equ 0x81d6bb3
+
+	atk12_waitmessage_ForcedFastMessagesPatch equ 0x9480f64
+	atk12_waitmessage_EndMessageWait equ 0x9480f4c
 
 	FREE_SPACE equ 0x8730000
 
@@ -62,6 +72,24 @@ AddTextPrinterHook:
 	nop
 	mov r0, 1
 	lsl r0, r0, 15
+
+	.org TurnStatChangeAnimOffPatch1
+	bne TurnStatChangeAnimOffPatch1ForcedAnimsIfStatement
+
+	.org TurnStatChangeAnimOffPatch2
+	.word 0x60020005 // changed from 0x60020007
+	// the value itself is a bitfield of values which cause forced anims
+	// game will perform (0x60020005 >> gBattlescriptCurrInstr[2]) << 0x1f
+	// if the bit is set in the bitfield then branch will occur
+
+	.org atk12_waitmessage_ForcedFastMessagesPatch
+	b atk12_waitmessage_EndMessageWait
+
+	.org BattleScript_Pausex20_PauseValue
+	.byte 1
+
+	.org BattleScript_EffectStatUpAfterAtkCanceler_Pause0x20_PauseValue
+	.byte 0
 
 	.org FREE_SPACE
 // compiled from https://github.com/luckytyphlosion/pokefirered/commit/a27b8f1458d92b96ace70bd0e80d4e85b29701e9
