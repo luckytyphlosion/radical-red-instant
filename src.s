@@ -37,6 +37,25 @@
 	atk12_waitmessage_ForcedFastMessagesPatch equ 0x9480f64
 	atk12_waitmessage_EndMessageWait equ 0x9480f4c
 
+	HandleWriteSector_SkipSaveSector30And31Patch equ 0x9498628
+	HandleWriteSector_End equ 0x949862a
+
+	save_write_to_flash_AddInSaveSector30And31Patch equ 0x80d9838
+	save_write_to_flash_End equ 0x80d9854
+
+	_call_via_r0 equ 0x081e3ba8
+
+	gSaveDataBuffer equ 0x02039a38
+	gDamagedSaveSectors equ 0x0300538c
+	gLastKnownGoodSector equ 0x03005388
+	gFirstSaveSector equ 0x03005380
+	gPrevSaveCounter equ 0x03005384
+	gSaveCounter equ 0x03005390
+
+	Memset equ 0x081e5ed8
+	Memcpy equ 0x081e5e78
+	TryWriteSector equ 0x080d99d8
+
 	FREE_SPACE equ 0x8730000
 
 	.open INPUT_FILE, OUTPUT_FILE, 0x8000000
@@ -90,6 +109,15 @@ AddTextPrinterHook:
 
 	.org BattleScript_EffectStatUpAfterAtkCanceler_Pause0x20_PauseValue
 	.byte 0
+
+	.org HandleWriteSector_SkipSaveSector30And31Patch
+	b HandleWriteSector_End
+
+	.org save_write_to_flash_AddInSaveSector30And31Patch
+	ldr r0, =SaveSector30And31AndCheckDamagedSectors|1
+	bl _call_via_r0
+	b save_write_to_flash_End
+	.pool
 
 	.org FREE_SPACE
 // compiled from https://github.com/luckytyphlosion/pokefirered/commit/a27b8f1458d92b96ace70bd0e80d4e85b29701e9
@@ -211,6 +239,145 @@ RenderFontHook:
 CopyWindowToVramHook:
 	ldr r2, =CopyWindowToVram|1
 	bx r2
+
+// The following was compiled with this code using https://godbolt.org/
+/*
+#include <stdint.h>
+
+typedef uint8_t   u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+typedef int8_t    s8;
+typedef int16_t  s16;
+typedef int32_t  s32;
+typedef int64_t  s64;
+
+struct SaveSection
+{
+    u8 data[0xFF4];
+    u16 id;
+    u16 checksum;
+    u32 security;
+    u32 counter;
+}; // size is 0x1000
+
+extern struct SaveSection gSaveDataBuffer;
+void* __attribute__((long_call)) Memset(void *dst, u8 pattern, u32 size);
+void* __attribute__((long_call)) Memcpy(void *dst, const void *src, u32 size);
+u8 __attribute__((long_call)) TryWriteSector(u8 sector, u8 *data);
+
+extern u16 gFirstSaveSector;
+extern u32 gPrevSaveCounter;
+extern u16 gLastKnownGoodSector;
+extern u32 gDamagedSaveSectors;
+extern u32 gSaveCounter;
+
+#define SECTOR_DATA_SIZE 0xFF0
+#define SECTOR_FOOTER_SIZE 128
+#define NUM_SECTORS_PER_SAVE_SLOT 14
+#define FILE_SIGNATURE 0x08012025
+#define gSaveBlockParasite 0x0203B174
+#define parasiteSize 0xEC4
+#define SAVE_STATUS_OK 1
+#define SAVE_STATUS_ERROR 0xFF
+
+u32 SaveSector30And31AndCheckDamagedSectors(void)
+{
+	u32 retVal = SAVE_STATUS_OK;
+	struct SaveSection* saveBuffer = &gSaveDataBuffer;
+	
+	//Write sector 30
+	Memset(saveBuffer, 0, sizeof(struct SaveSection));
+	u32 startLoc = gSaveBlockParasite + parasiteSize;
+	Memcpy(saveBuffer->data, (void*)(startLoc), SECTOR_DATA_SIZE);
+	TryWriteSector(30, saveBuffer->data);
+
+	//Write sector 31
+	Memset(saveBuffer, 0, sizeof(struct SaveSection));
+	startLoc += SECTOR_DATA_SIZE;
+	Memcpy(saveBuffer->data, (void*)(startLoc), SECTOR_DATA_SIZE);
+	TryWriteSector(31, saveBuffer->data);
+
+    if (gDamagedSaveSectors != 0) // skip the damaged sector.
+    {
+        retVal = SAVE_STATUS_ERROR;
+        gFirstSaveSector = gLastKnownGoodSector;
+        gSaveCounter = gPrevSaveCounter;
+    }
+
+    return retVal;
+}
+*/
+
+SaveSector30And31AndCheckDamagedSectors:
+        mov    r2, 128
+        push    {r3, r4, r5, r6, r7, lr}
+        ldr     r4, [@@L6]
+        mov    r1, 0
+        ldr     r7, [@@L6+4]
+        lsl    r2, r2, 5
+        mov    r0, r4
+        bl      @@L8
+        mov    r2, 255
+        ldr     r1, [@@L6+8]
+        lsl    r2, r2, 4
+        ldr     r6, [@@L6+12]
+        mov    r0, r4
+        bl      @@L9
+        mov    r1, r4
+        ldr     r5, [@@L6+16]
+        mov    r0, 30
+        bl      @@L10
+        mov    r2, 128
+        mov    r1, 0
+        lsl    r2, r2, 5
+        mov    r0, r4
+        bl      @@L8
+        mov    r2, 255
+        ldr     r1, [@@L6+20]
+        lsl    r2, r2, 4
+        mov    r0, r4
+        bl      @@L9
+        mov    r1, r4
+        mov    r0, 31
+        bl      @@L10
+        ldr     r3, [@@L6+24]
+        ldr     r3, [r3]
+        mov    r0, 1
+        cmp     r3, 0
+        beq     @@L1
+        ldr     r2, [@@L6+28]
+        ldr     r3, [@@L6+32]
+        ldrh    r2, [r2]
+        strh    r2, [r3]
+        ldr     r2, [@@L6+36]
+        ldr     r3, [@@L6+40]
+        ldr     r2, [r2]
+        str     r2, [r3]
+        add    r0, 254
+@@L1:
+        pop     {r3, r4, r5, r6, r7}
+        pop     {r1}
+        bx      r1
+@@L6:
+        .word   gSaveDataBuffer
+        .word   Memset|1
+        .word   33800248
+        .word   Memcpy|1
+        .word   TryWriteSector|1
+        .word   33804328
+        .word   gDamagedSaveSectors
+        .word   gLastKnownGoodSector
+        .word   gFirstSaveSector
+        .word   gPrevSaveCounter
+        .word   gSaveCounter
+@@L10:
+        bx      r5
+@@L9:
+        bx      r6
+@@L8:
+        bx      r7
 
 	.pool
 
