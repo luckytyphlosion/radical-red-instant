@@ -14,31 +14,28 @@
 	.gba
 	.thumb
 
-	INPUT_FILE equ "rr2_3a.gba"
-	OUTPUT_FILE equ "rr2_3a_instant_text.gba"
+	INPUT_FILE equ "rr3_02.gba"
+	OUTPUT_FILE equ "rr3_02_instant_text.gba"
 
-	AddTextPrinterHookPatch equ 0x8002cfc
-	RunTextPrinters equ 0x8002de8
-
-	RenderFont equ 0x8002e7c
-	CopyWindowToVram equ 0x8003f20
-	sTextPrinters equ 0x2020034
+	FAST_MESSAGES equ 1
 
 	InstantHPBarsPatch1 equ 0x804a300
 	InstantHPBarsPatch2 equ 0x804a360
 
-	TurnStatChangeAnimOffPatch1 equ 0x9481cfc
-	TurnStatChangeAnimOffPatch2 equ 0x9481ddc
-	TurnStatChangeAnimOffPatch1ForcedAnimsIfStatement equ 0x9481d06
+	TurnStatChangeAnimOffPatch1 equ 0x948de90
+	TurnStatChangeAnimOffPatch2 equ 0x948df70
+	TurnStatChangeAnimOffPatch1ForcedAnimsIfStatement equ 0x948de9a
+	atk48_playstatchangeanimation_ForcedNoAnimsPatch equ 0x94ab366
+	atk48_playstatchangeanimation_BattlescriptPlus4AndReturn equ 0x94ab33a
 
 	BattleScript_Pausex20_PauseValue equ 0x81d89f2
 	BattleScript_EffectStatUpAfterAtkCanceler_Pause0x20_PauseValue equ 0x81d6bb3
 
-	atk12_waitmessage_ForcedFastMessagesPatch equ 0x9480f64
-	atk12_waitmessage_EndMessageWait equ 0x9480f4c
+	atk12_waitmessage_ForcedFastMessagesPatch equ 0x948cfd0
+	atk12_waitmessage_EndMessageWait equ 0x948cfb8
 
-	HandleWriteSector_SkipSaveSector30And31Patch equ 0x9498628
-	HandleWriteSector_End equ 0x949862a
+	HandleWriteSector_SkipSaveSector30And31Patch equ 0x94a5a68
+	HandleWriteSector_End equ 0x94a5ab6
 
 	save_write_to_flash_AddInSaveSector30And31Patch equ 0x80d9838
 	save_write_to_flash_End equ 0x80d9854
@@ -56,26 +53,9 @@
 	Memcpy equ 0x081e5e78
 	TryWriteSector equ 0x080d99d8
 
-	FREE_SPACE equ 0x8730000
+	FREE_SPACE equ 0x8770000
 
 	.open INPUT_FILE, OUTPUT_FILE, 0x8000000
-	.org AddTextPrinterHookPatch
-	b AddTextPrinterHook
-AddTextPrinterHookReturn:
-
-	.org RunTextPrinters
-	ldr r0, =RunTextPrintersForInstantText|1
-	bx r0
-	.pool
-
-AddTextPrinterHook:
-	lsr r5, r1, 0x18
-	cmp r5, 0
-	beq AddTextPrinterHookReturn
-	cmp r5, 0xff
-	beq AddTextPrinterHookReturn
-	mov r5, 1
-	b AddTextPrinterHookReturn
 
 	// partially based on https://github.com/luckytyphlosion/pokefirered/commit/5e8fee38e3438131c746b6bde327f1289750e7a5
 	// but need to add `s32 toAdd_ = 32768` somewhere
@@ -101,6 +81,10 @@ AddTextPrinterHook:
 	// game will perform (0x60020005 >> gBattlescriptCurrInstr[2]) << 0x1f
 	// if the bit is set in the bitfield then branch will occur
 
+	.org atk48_playstatchangeanimation_ForcedNoAnimsPatch
+	b atk48_playstatchangeanimation_BattlescriptPlus4AndReturn
+
+	.if FAST_MESSAGES
 	.org atk12_waitmessage_ForcedFastMessagesPatch
 	b atk12_waitmessage_EndMessageWait
 
@@ -109,6 +93,7 @@ AddTextPrinterHook:
 
 	.org BattleScript_EffectStatUpAfterAtkCanceler_Pause0x20_PauseValue
 	.byte 0
+	.endif
 
 	.org HandleWriteSector_SkipSaveSector30And31Patch
 	b HandleWriteSector_End
@@ -120,125 +105,7 @@ AddTextPrinterHook:
 	.pool
 
 	.org FREE_SPACE
-// compiled from https://github.com/luckytyphlosion/pokefirered/commit/a27b8f1458d92b96ace70bd0e80d4e85b29701e9
-RunTextPrintersForInstantText:
-        push    {r4, r5, r6, r7, lr}
-        mov     r7, r9
-        mov     r6, r8
-        push    {r6, r7}
 
-
-        mov     r2, 0
-@@L6:
-
-        ldr     r5, =sTextPrinters
-        lsl     r0, r2, 3
-        add     r0, r0, r2
-        lsl     r3, r0, 2
-        add     r1, r3, r5
-        ldrb    r0, [r1, 27]
-        add     r2, r2, 1
-        mov     r9, r2
-        cmp     r0, 0
-        beq     @@L5       
-
-        mov     r0, 0
-        mov     r8, r0
-        add     r4, r1, 0
-        add     r0, r5, 0
-        add     r0, 16
-        add     r5, r3, r0
-@@L11:
-
-
-        ldrb    r7, [r4, 28]
-
-        add     r0, r4, 0
-        bl      RenderFontHook
-        lsl     r0, r0, 16
-        lsr     r0, r0, 16
-        add     r1, r0, 0
-
-        ldrb    r6, [r4, 28]
-
-        cmp     r0, 0
-        bne     @@L12      
-
-        ldr     r2, [r5]
-        cmp     r2, 0
-        beq     @@L10      
-
-        add     r0, r4, 0
-        mov     r1, 0
-        mov lr, pc
-		bx r2
-
-        b       @@L10
-@@L12:
-        cmp     r0, 3
-        bne     @@L15      
-
-        ldr     r2, [r5]
-        cmp     r2, 0
-        beq     @@L16      
-
-        add     r0, r4, 0
-        mov     r1, 3
-        mov lr, pc
-		bx r2
-@@L16:
-
-        cmp     r7, 0
-        bne     @@L5       
-        cmp     r6, 0
-        beq     @@L5       
-
-        ldrb    r0, [r4, 4]
-        mov     r1, 2
-        bl      CopyWindowToVramHook
-
-        b       @@L5
-
-@@L15:
-        cmp     r1, 1
-        bne     @@L10      
-
-        ldrb    r0, [r4, 4]
-        mov     r1, 2
-        bl      CopyWindowToVramHook
-
-        mov     r0, 0
-        strb    r0, [r4, 27]
-
-        b       @@L5
-
-
-@@L10:
-        mov     r0, 1
-        add     r8, r0
-        ldr     r0, =1023
-        cmp     r8, r0
-        ble     @@L11      
-
-@@L5:
-        mov     r2, r9
-        cmp     r2, 31
-        ble     @@L6       
-
-        pop     {r3, r4}
-        mov     r8, r3
-        mov     r9, r4
-        pop     {r4, r5, r6, r7}
-        pop     {r0}
-        bx      r0
-
-RenderFontHook:
-	ldr r1, =RenderFont|1
-	bx r1
-
-CopyWindowToVramHook:
-	ldr r2, =CopyWindowToVram|1
-	bx r2
 
 // The following was compiled with this code using https://godbolt.org/
 /*
